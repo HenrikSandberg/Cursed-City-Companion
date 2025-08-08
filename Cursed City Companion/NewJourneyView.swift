@@ -1,114 +1,121 @@
-//
-//  NewJourneyView.swift
-//  Cursed City Companion
-//
-//  Created by Henrik Anthony Odden Sandberg on 08/08/2025.
-//
-
-
 import SwiftUI
 
 struct NewJourneyView: View {
-    @Environment(\.dismiss) var dismiss
-    @ObservedObject var store = DataStore.shared
-    let questID: UUID
+    let heroes: [Hero]
+    var onCommit: (Journey) -> Void
 
-    @State private var selectedHeroes: Set<UUID> = []
+    @State private var selectedHeroIDs: Set<UUID> = []
+    @State private var enemyGroups: Double = 2
     @State private var journeyType: JourneyType = .hunt
     @State private var journeyLevel: Int = 1
-    @State private var enemyGroups: Int = 1
-    @State private var selectedEnemyGroups: [String] = []
+
+    @State private var selectedHuntMap: HuntMap = .alleyways
+    @State private var selectedScavengeMap: ScavengeMap = .abandonedMarketplace
+
+    @Environment(\.presentationMode) var presentationMode
 
     var body: some View {
         NavigationView {
             Form {
-                if let types = store.gameData?.journeyTypes {
-                    Picker("Type", selection: $journeyType) {
-                        ForEach(types, id: \.name) { type in
-                            Text(type.name)
+                Section(header: Text("Journey Details").foregroundColor(.cursedGold)) {
+                    Picker("Journey Type", selection: $journeyType) {
+                        ForEach(JourneyType.allCases, id: \.self) {
+                            Text($0.rawValue)
                         }
                     }
-                    .pickerStyle(SegmentedPickerStyle())
+
+                    // Conditionally show the map picker
+                    if journeyType == .hunt {
+                        Picker("Map", selection: $selectedHuntMap) {
+                            ForEach(HuntMap.allCases) { map in
+                                Text(map.rawValue).tag(map)
+                            }
+                        }
+                    } else if journeyType == .scavenge {
+                        Picker("Map", selection: $selectedScavengeMap) {
+                            ForEach(ScavengeMap.allCases) { map in
+                                Text(map.rawValue).tag(map)
+                            }
+                        }
+                    }
+
+                    Stepper("Journey Level: \(journeyLevel)", value: $journeyLevel, in: 1...4)
+                    Stepper("Enemy Groups: \(Int(enemyGroups))", value: $enemyGroups, in: 1...10)
                 }
 
-                Section(header: Text("Level")) {
-                    Stepper("Level \(journeyLevel)", value: $journeyLevel, in: 1...5)
-                }
-
-                Section(header: Text("Select Heroes")) {
-                    if let quest = store.quests.first(where: { $0.id == questID }) {
-                        ForEach(quest.heroes) { hero in
-                            if hero.alive {
-                                Toggle(hero.name, isOn: Binding(
-                                    get: { selectedHeroes.contains(hero.id) },
-                                    set: { val in
-                                        if val { selectedHeroes.insert(hero.id) }
-                                        else { selectedHeroes.remove(hero.id) }
-                                    }
-                                ))
+                Section(header: Text("Select Heroes").foregroundColor(.cursedGold)) {
+                    ForEach(heroes) { hero in
+                        if hero.isAlive {
+                            MultipleSelectionRow(
+                                title: hero.name,
+                                isSelected: selectedHeroIDs.contains(hero.id)
+                            ) {
+                                if selectedHeroIDs.contains(hero.id) {
+                                    selectedHeroIDs.remove(hero.id)
+                                } else {
+                                    selectedHeroIDs.insert(hero.id)
+                                }
                             }
                         }
                     }
                 }
 
-                Section(header: Text("Enemy Groups")) {
-                    if let groups = store.gameData?.enemyGroups {
-                        ForEach(groups, id: \.name) { group in
-                            Toggle(group.name, isOn: Binding(
-                                get: { selectedEnemyGroups.contains(group.name) },
-                                set: { val in
-                                    if val { selectedEnemyGroups.append(group.name) }
-                                    else { selectedEnemyGroups.removeAll { $0 == group.name } }
-                                }
-                            ))
-                        }
-                    } else {
-                        Stepper("\(enemyGroups) group\(enemyGroups > 1 ? "s" : "")", value: $enemyGroups, in: 1...8)
-                    }
+                Button("Start Journey") {
+                    let newJourney = setupNewJourney()
+                    onCommit(newJourney)
                 }
+                .disabled(selectedHeroIDs.isEmpty)
             }
             .navigationTitle("New Journey")
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Start") {
-                        startJourney()
-                        dismiss()
+                    Button("Cancel") {
+                        presentationMode.wrappedValue.dismiss()
                     }
-                    .disabled(selectedHeroes.isEmpty)
                 }
             }
         }
     }
 
-    func startJourney() {
-        guard let quest = store.quests.first(where: { $0.id == questID }) else { return }
+    func setupNewJourney() -> Journey {
+        var initiativeOrder: [InitiativeParticipant] = []
 
-        // Build initiative list: heroes first, then enemies
-        var initiative: [InitiativeEntry] = []
-        var orderIndex = 0
-        for heroID in selectedHeroes {
-            if let hero = quest.heroes.first(where: { $0.id == heroID }) {
-                initiative.append(InitiativeEntry(name: hero.name, isHero: true, orderIndex: orderIndex))
-                orderIndex += 1
+        for heroID in selectedHeroIDs {
+            if let hero = heroes.first(where: { $0.id == heroID }) {
+                initiativeOrder.append(InitiativeParticipant(name: hero.name, isHero: true, heroID: hero.id))
             }
         }
-        
-        for groupName in selectedEnemyGroups {
-            initiative.append(InitiativeEntry(name: groupName, isHero: false, orderIndex: orderIndex))
-            orderIndex += 1
+        for i in 1...Int(enemyGroups) {
+            initiativeOrder.append(InitiativeParticipant(name: "Enemy Group \(i)", isHero: false))
+        }
+        initiativeOrder.shuffle()
+
+        // Determine the map name to save
+        let mapName: String?
+        if journeyType == .hunt {
+            mapName = selectedHuntMap.rawValue
+        } else if journeyType == .scavenge {
+            mapName = selectedScavengeMap.rawValue
+        } else {
+            mapName = nil
         }
 
-        let journey = Journey(
-            type: journeyType,
+        return Journey(
+            journeyType: journeyType,
             level: journeyLevel,
-            selectedHeroIDs: Array(selectedHeroes),
-            enemyGroups: enemyGroups,
-            initiative: initiative
+            mapName: mapName,
+            participatingHeroes: Array(selectedHeroIDs),
+            enemyGroups: Int(enemyGroups),
+            initiativeOrder: initiativeOrder
         )
-
-        store.addJourney(journey, to: questID)
     }
 }
+
+#if DEBUG
+struct NewJourneyView_Previews: PreviewProvider {
+    static var previews: some View {
+        NewJourneyView(heroes: Hero.defaultHeroes, onCommit: { _ in })
+            .preferredColorScheme(.dark)
+    }
+}
+#endif

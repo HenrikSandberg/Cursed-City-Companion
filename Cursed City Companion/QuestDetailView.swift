@@ -1,126 +1,242 @@
-//
-//  QuestDetailView.swift
-//  Cursed City Companion
-//
-//  Created by Henrik Anthony Odden Sandberg on 08/08/2025.
-//
-
-
 import SwiftUI
 
 struct QuestDetailView: View {
-    @ObservedObject var store = DataStore.shared
-    let questID: UUID
-    @State private var showNewJourney = false
-
-    var questIndex: Int? {
-        store.quests.firstIndex(where: { $0.id == questID })
-    }
+    @Binding var quest: Quest
+    
+    @State private var showingNewJourneySheet = false
 
     var body: some View {
-        Group {
-            if let qi = questIndex {
-                let q = store.quests[qi]
-                VStack(spacing: 12) {
-                    // Top counters
+        ZStack {
+            Color.darkstone.edgesIgnoringSafeArea(.all)
+            ScrollView {
+                VStack(alignment: .leading, spacing: 20) {
+                    // Quest Scores
                     HStack {
-                        counterView(title: "Fear", value: q.fear, color: .red)
-                        counterView(title: "Influence", value: q.influence, color: .blue)
-                        counterView(title: "Decapitations", value: q.decapitationTokens, color: .secondary)
+                        ScoreView(title: "Influence", score: quest.influence, color: .bloodRed)
+                        Spacer()
+                        ScoreView(title: "Fear", score: quest.fear, color: .vampireViolet)
                     }
                     .padding(.horizontal)
 
+                    // Last Extraction Event
+                    if let lastEvent = quest.lastExtractionEvent {
+                        LastExtractionEventView(event: lastEvent)
+                            .padding(.horizontal)
+                    }
+
+                    // Decapitation Progress
+                    DecapitationProgressView(progress: quest.decapitationProgress)
+                        .padding(.horizontal)
+
                     // Heroes
-                    Section(header: Text("Heroes")) {
-                        ScrollView(.horizontal, showsIndicators: false) {
-                            HStack {
-                                ForEach(q.heroes) { hero in
-                                    NavigationLink(destination: HeroDetailView(heroID: hero.id, questID: q.id)) {
-                                        VStack {
-                                            Text(hero.name).bold()
-                                            Text("Lvl \(hero.level)").font(.caption)
-                                            Text(hero.alive ? "Alive" : "Dead").font(.caption2).foregroundColor(hero.alive ? .green : .red)
-                                        }
-                                        .frame(width: 150, height: 80)
-                                        .background(RoundedRectangle(cornerRadius: 8).fill(Color(.secondarySystemBackground)))
-                                    }
-                                }
-                            }.padding(.horizontal)
+                    Text("Heroes")
+                        .font(.title2)
+                        .foregroundColor(.cursedGold)
+                        .padding(.horizontal)
+                    
+                    ForEach($quest.heroes) { $hero in
+                        NavigationLink(destination: HeroDetailView(hero: $hero)) {
+                            HeroRow(hero: hero)
                         }
                     }
-
-                    // Active journeys & history
-                    List {
-                        Section(header: Text("Active Journeys")) {
-                            ForEach(q.activeJourneys) { j in
-                                NavigationLink(destination: JourneyView(questID: q.id, journeyID: j.id)) {
-                                    HStack {
-                                        Text(j.type.rawValue.capitalized)
-                                        Spacer()
-                                        Text("Lvl \(j.level)")
-                                    }
-                                }
+                    .padding(.horizontal)
+                    
+                    // Journeys
+                    Text("Completed Journeys")
+                        .font(.title2)
+                        .foregroundColor(.cursedGold)
+                        .padding(.horizontal)
+                    
+                    if quest.completedJourneys.isEmpty {
+                        Text("No journeys completed yet.")
+                            .foregroundColor(.parchment)
+                            .padding(.horizontal)
+                    } else {
+                        ForEach(quest.completedJourneys) { journey in
+                            NavigationLink(destination: CompletedJourneyDetailView(journey: journey, allHeroes: quest.heroes)) {
+                                JourneyRow(journey: journey)
                             }
                         }
-
-                        Section(header: Text("History")) {
-                            ForEach(q.history) { rec in
-                                VStack(alignment: .leading) {
-                                    Text(rec.journey.type.rawValue.capitalized + " (Lvl \(rec.journey.level))")
-                                    HStack {
-                                        Text(rec.success ? "Success" : "Failed")
-                                            .font(.caption).foregroundColor(rec.success ? .green : .red)
-                                        Spacer()
-                                        Text("Ended \(shortDate(rec.endedAt))").font(.caption2)
-                                    }
-                                }
-                            }
+                        .padding(.horizontal)
+                    }
+                    // Active Journey / Start New Journey Buttons
+                    if quest.activeJourney != nil {
+                        NavigationLink(destination: ActiveJourneyView(quest: $quest)) {
+                            Text("Continue Active Journey")
+                                .font(.headline)
+                                .padding()
+                                .background(Color.green)
+                                .foregroundColor(.white)
+                                .cornerRadius(10)
+                                .frame(maxWidth: .infinity)
                         }
+                    } else {
+                        Button("Start New Journey") {
+                            showingNewJourneySheet = true
+                        }
+                        .font(.headline)
+                        .padding()
+                        .background(Color.cursedGold)
+                        .foregroundColor(.darkstone)
+                        .cornerRadius(10)
+                        .frame(maxWidth: .infinity)
                     }
                 }
-                .navigationTitle(q.title)
-                .toolbar {
-                    ToolbarItem(placement: .navigationBarTrailing) {
-                        Menu {
-                            Button("New Journey") { showNewJourney = true }
-                            Button("Edit Heroes") { /* hero editor */ }
-                        } label: {
-                            Image(systemName: "plus.circle")
-                        }
-                    }
-                }
-                .sheet(isPresented: $showNewJourney) {
-                    NewJourneyView(questID: q.id)
-                }
-            } else {
-                Text("Quest not found")
             }
         }
-    }
-
-    func counterView(title: String, value: Int, color: Color) -> some View {
-        VStack {
-            Text(title).font(.caption)
-            Text("\(value)").font(.largeTitle).bold().foregroundColor(color)
-        }
-        .padding()
-        .background(RoundedRectangle(cornerRadius: 8).fill(Color(.systemBackground)).shadow(radius: 1))
-    }
-
-    func shortDate(_ d: Date) -> String {
-        let f = DateFormatter(); f.dateStyle = .short; return f.string(from: d)
-    }
-
-    func openNewJourney(for quest: Quest) {
-        // create a new Journey with default initiative from heroes
-        var entries: [InitiativeEntry] = []
-        for (i, hero) in quest.heroes.enumerated() {
-            if hero.alive {
-                entries.append(InitiativeEntry(name: hero.name, isHero: true, orderIndex: i))
+        .navigationTitle(quest.name)
+        .sheet(isPresented: $showingNewJourneySheet) {
+            NewJourneyView(heroes: quest.heroes) { newJourney in
+                quest.activeJourney = newJourney
+                showingNewJourneySheet = false
             }
         }
-        // add default enemy groups markers
-        let journey = Journey(type: .hunt, level: 1, selectedHeroIDs: quest.heroes.filter { $0.alive }.map { $0.id }, enemyGroups: 1, initiative: entries)
-        DataStore.shared.addJourney(journey, to: quest.id)
     }
 }
+
+struct LastExtractionEventView: View {
+    let event: ExtractionEvent
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 5) {
+            Text("Last Extraction Event")
+                .font(.headline)
+                .foregroundColor(.cursedGold)
+            Text(event.rawValue)
+                .font(.subheadline).bold()
+                .foregroundColor(.parchment)
+            Text(event.description)
+                .font(.caption)
+                .foregroundColor(.gray)
+        }
+        .padding()
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.black.opacity(0.3))
+        .cornerRadius(10)
+        .overlay(
+            RoundedRectangle(cornerRadius: 10)
+                .stroke(Color.cursedGold, lineWidth: 1)
+        )
+    }
+}
+
+// --- Other subviews (ScoreView, HeroRow, etc.) remain the same ---
+struct ScoreView: View {
+    var title: String
+    var score: Int
+    var color: Color
+
+    var body: some View {
+        VStack {
+            Text(title)
+                .font(.headline)
+                .foregroundColor(.cursedGold)
+            Text("\(score)")
+                .font(.largeTitle)
+                .fontWeight(.bold)
+                .foregroundColor(color)
+        }
+        .padding()
+        .background(Color.black.opacity(0.3))
+        .cornerRadius(10)
+    }
+}
+
+struct DecapitationProgressView: View {
+    var progress: DecapitationProgress
+    
+    var body: some View {
+        VStack(alignment: .leading) {
+            Text("Decapitation Progress")
+                .font(.title2)
+                .foregroundColor(.cursedGold)
+            
+            Text("Fell Guardian: \(progress.fellGuardian ? "Done" : "Pending")")
+                .foregroundColor(.parchment)
+            Text("Captain of the Damned: \(progress.captainOfTheDamned ? "Done" : "Pending")")
+                .foregroundColor(.parchment)
+        }
+        .padding()
+        .background(Color.black.opacity(0.3))
+        .cornerRadius(10)
+    }
+}
+
+struct HeroRow: View {
+    var hero: Hero
+    
+    var body: some View {
+        HStack {
+            Image(hero.imageName)
+                .resizable()
+                .frame(width: 50, height: 50)
+                .clipShape(Circle())
+            VStack(alignment: .leading) {
+                Text(hero.name)
+                    .font(.headline)
+                    .foregroundColor(.parchment)
+                Text("Level \(hero.level)")
+                    .foregroundColor(.gray)
+            }
+            Spacer()
+            Text(hero.isAlive ? "Alive" : "Dead")
+                .foregroundColor(hero.isAlive ? .green : .red)
+        }
+        .padding()
+        .background(Color.vampireViolet.opacity(0.5))
+        .cornerRadius(10)
+    }
+}
+
+struct JourneyRow: View {
+    var journey: Journey
+    
+    var body: some View {
+         VStack(alignment: .leading) {
+            Text("\(journey.journeyType.rawValue) - Level \(journey.level)")
+                .font(.headline)
+                .foregroundColor(.parchment)
+            
+            if let mapName = journey.mapName {
+                Text(mapName)
+                    .font(.caption)
+                    .foregroundColor(.gray)
+            }
+            
+            Text("Success: \(journey.wasSuccessful ? "Yes" : "No")")
+                .foregroundColor(journey.wasSuccessful ? .green : .red)
+        }
+        .padding()
+        .background(Color.vampireViolet.opacity(0.5))
+        .cornerRadius(10)
+    }
+}
+
+
+#if DEBUG
+struct QuestDetailView_Previews: PreviewProvider {
+    struct PreviewWrapper: View {
+        @State var quest: Quest
+        
+        init() {
+            var mockQuest = Quest(name: "Preview Quest", influence: 7, fear: 4)
+            mockQuest.completedJourneys.append(Journey(journeyType: .hunt, level: 1, wasSuccessful: true, participatingHeroes: [], enemyGroups: 3))
+            mockQuest.heroes[2].isAlive = false
+            mockQuest.heroes[1].level = 1
+            mockQuest.lastExtractionEvent = .moraleBoost
+            _quest = State(initialValue: mockQuest)
+        }
+        
+        var body: some View {
+            QuestDetailView(quest: $quest)
+        }
+    }
+    
+    static var previews: some View {
+        NavigationView {
+            PreviewWrapper()
+        }
+        .preferredColorScheme(.dark)
+    }
+}
+#endif
