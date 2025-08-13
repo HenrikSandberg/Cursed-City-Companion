@@ -11,6 +11,7 @@ struct NewJourneyView: View {
     @State private var level: Int = 1
     @State private var enemyGroups: Int = 3
     @State private var selectedHeroes = Set<UUID>()
+    @State private var navigateToActive = false
     
     var body: some View {
         NavigationStack {
@@ -18,7 +19,9 @@ struct NewJourneyView: View {
             // all content is accessible, even on smaller screens.
             ScrollView {
                 VStack(spacing: 16) {
+
                     journeySettingsPanel
+                    consequencesPreviewPanel
 
                     if type == .decapitation {
                         // The placeholder is now replaced with the actual, interactive DecapitationRow.
@@ -43,6 +46,9 @@ struct NewJourneyView: View {
             }
             .ccToolbar()
             .ccBackground()
+            .navigationDestination(isPresented: $navigateToActive) {
+                ActiveJourneyView(questId: quest.id)
+            }
         }
     }
 
@@ -53,6 +59,32 @@ struct NewJourneyView: View {
             }.pickerStyle(.segmented)
             Stepper("Level \(level)", value: $level, in: 1...max(1, quest.partyLevelCap))
             Stepper("Enemy groups \(enemyGroups)", value: $enemyGroups, in: 1...8)
+        }.ccPanel()
+    }
+    
+    private var consequencesPreviewPanel: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Base Consequences").font(.headline).foregroundStyle(CCTheme.cursedGold)
+            
+            let consequences = type.baseConsequences
+            
+            VStack(alignment: .leading, spacing: 2) {
+                Text("On Success:").font(.subheadline.weight(.semibold))
+                Text("Influence \(consequences.onSuccess.influence), Fear \(consequences.onSuccess.fear)")
+                    .foregroundStyle(.secondary)
+            }
+            .padding(.bottom, 4)
+            
+            VStack(alignment: .leading, spacing: 2) {
+                Text("On Failure:").font(.subheadline.weight(.semibold))
+                Text("Influence \(consequences.onFailure.influence), Fear \(consequences.onFailure.fear)")
+                    .foregroundStyle(.secondary)
+            }
+            
+            Text("Final outcome will also include the Extraction Event modifier.")
+                .font(.footnote).italic().foregroundStyle(.secondary)
+                .padding(.top, 6)
+
         }.ccPanel()
     }
 
@@ -106,6 +138,7 @@ struct NewJourneyView: View {
         )
         
         onStarted()
-        dismiss()
+        // Navigate to the active journey view within this NavigationStack
+        navigateToActive = true
     }
 }

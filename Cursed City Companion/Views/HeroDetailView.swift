@@ -11,7 +11,7 @@ struct HeroDetailView: View {
 
     var body: some View {
         // We only show the form if the hero state has been loaded.
-        if var heroBinding = Binding($hero) {
+        if let heroBinding = Binding($hero) {
             Form {
                 Section(header: Text("Stats")) {
                     Stepper("Level \(heroBinding.wrappedValue.level)", value: heroBinding.level, in: 1...4)

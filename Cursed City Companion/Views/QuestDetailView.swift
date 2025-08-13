@@ -22,8 +22,6 @@ struct QuestDetailView: View {
     }
 
     var body: some View {
-        // We safely unwrap the quest object. If it's not found (e.g., during a data update),
-        // we show a loading indicator instead of crashing.
         if let quest = quest {
             ZStack {
                 ArcadeBackground()
