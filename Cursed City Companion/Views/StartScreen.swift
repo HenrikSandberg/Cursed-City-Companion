@@ -1,9 +1,8 @@
 import SwiftUI
 
 struct StartScreen: View {
-    @EnvironmentObject private var store: Store
-    @State private var newName: String = ""
-    @State private var showingCreate = false
+    @EnvironmentObject private var questManager: QuestManager
+    @State private var showingCreateSheet = false
 
     var body: some View {
         ZStack {
@@ -15,7 +14,7 @@ struct StartScreen: View {
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
 
-                if store.quests.isEmpty {
+                if questManager.quests.isEmpty {
                     Text("No quests yet. Start a new campaign.")
                         .foregroundStyle(CCTheme.parchment).opacity(0.9)
                         .ccPanel()
@@ -23,24 +22,14 @@ struct StartScreen: View {
 
                 List {
                     Section {
-                        ForEach(store.quests) { q in
-                            NavigationLink(value: q.id) {
-                                HStack {
-                                    VStack(alignment: .leading) {
-                                        Text(q.name).font(.headline)
-                                        Text("Influence \(q.influence) • Fear \(q.fear)")
-                                            .font(.caption).foregroundStyle(CCTheme.parchment.opacity(0.9))
-                                    }
-                                    Spacer()
-                                    if q.activeJourney != nil {
-                                        Text("Active").font(.caption2.weight(.bold)).padding(6)
-                                            .background(Capsule().fill(CCTheme.bloodRed.opacity(0.9)))
-                                    }
-                                }
+                        ForEach(questManager.quests) { quest in
+                            // Navigation is now based on the stable UUID of the quest.
+                            NavigationLink(value: quest.id) {
+                                QuestListRow(quest: quest)
                             }
                         }
-                        .onDelete { idx in
-                            store.quests.remove(atOffsets: idx)
+                        .onDelete { indexSet in
+                            questManager.deleteQuest(at: indexSet)
                         }
                     } header: { Text("Quests") }
                 }
@@ -48,7 +37,7 @@ struct StartScreen: View {
                 .frame(maxHeight: 400)
 
                 Button {
-                    showingCreate = true
+                    showingCreateSheet = true
                 } label: {
                     Label("New Quest", systemImage: "plus.circle.fill")
                 }
@@ -57,23 +46,47 @@ struct StartScreen: View {
                 Spacer()
             }
             .padding()
-            .navigationDestination(for: UUID.self) { id in
-                QuestDetailView(questId: id)
+            // The navigation destination now listens for a UUID to show the QuestDetailView.
+            .navigationDestination(for: UUID.self) { questId in
+                QuestDetailView(questId: questId)
             }
         }
-        .sheet(isPresented: $showingCreate) {
-            CreateQuestSheet() { name in
-                store.newQuest(name: name)
+        .sheet(isPresented: $showingCreateSheet) {
+            CreateQuestSheet { name in
+                questManager.createQuest(name: name)
+                showingCreateSheet = false
             }
-            .presentationDetents([.medium, .large])
+            .presentationDetents([.medium])
         }
     }
 }
+
+struct QuestListRow: View {
+    let quest: Quest
+    
+    var body: some View {
+        HStack {
+            VStack(alignment: .leading) {
+                Text(quest.name).font(.headline)
+                Text("Influence \(quest.influence) • Fear \(quest.fear)")
+                    .font(.caption).foregroundStyle(CCTheme.parchment.opacity(0.9))
+            }
+            Spacer()
+            if quest.activeJourney != nil {
+                Text("Active")
+                    .font(.caption2.weight(.bold)).padding(6)
+                    .background(Capsule().fill(CCTheme.bloodRed.opacity(0.9)))
+            }
+        }
+    }
+}
+
 
 struct CreateQuestSheet: View {
     var onCreate: (String) -> Void
     @Environment(\.dismiss) private var dismiss
     @State private var name: String = ""
+
     var body: some View {
         NavigationStack {
             VStack(spacing: 16) {
@@ -81,7 +94,8 @@ struct CreateQuestSheet: View {
                     .textFieldStyle(.roundedBorder)
                 Text("Starts with Influence 5 and Fear 5.").font(.footnote).foregroundStyle(.secondary)
                 Spacer()
-            }.padding()
+            }
+            .padding()
             .navigationTitle("New Quest")
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -89,11 +103,12 @@ struct CreateQuestSheet: View {
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Create") {
-                        onCreate(name.isEmpty ? "Ulfenkarn in Peril" : name)
-                        dismiss()
-                    }.disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                        onCreate(name.trimmingCharacters(in: .whitespacesAndNewlines))
+                    }
+                    .disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                 }
             }
+            .ccBackground()
         }
     }
 }

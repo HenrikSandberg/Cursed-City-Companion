@@ -1,31 +1,44 @@
 import Foundation
 
-// A simplified manager for loading and saving the entire quest list.
-class PersistenceManager {
-    static let shared = PersistenceManager()
-    private let questsKey = "CursedCityQuests"
+/// Handles encoding and decoding the quest data to a JSON file.
+final class PersistenceManager {
+    
+    private let fileURL: URL
 
-    private init() {}
+    init() {
+        do {
+            let directory = try FileManager.default.url(for: .documentDirectory, in: .userDomainMask, appropriateFor: nil, create: true)
+            self.fileURL = directory.appendingPathComponent("cursed_city_quests.json")
+        } catch {
+            fatalError("Unable to get document directory: \(error)")
+        }
+    }
 
-    // Fetches the array of quests from UserDefaults.
-    func getQuests() -> [Quest] {
-        guard let data = UserDefaults.standard.data(forKey: questsKey) else { return [] }
+    /// Loads all quests from the JSON file.
+    /// - Returns: An array of `Quest` objects. Returns an empty array if the file doesn't exist or fails to decode.
+    func loadQuests() -> [Quest] {
+        guard let data = try? Data(contentsOf: fileURL) else {
+            return []
+        }
+        
         do {
             let quests = try JSONDecoder().decode([Quest].self, from: data)
             return quests
         } catch {
             print("Error decoding quests: \(error)")
+            // Consider handling data corruption, e.g., by backing up the file and returning an empty array.
             return []
         }
     }
 
-    // Saves the entire array of quests to UserDefaults.
+    /// Saves the entire list of quests to the JSON file.
+    /// - Parameter quests: The array of `Quest` objects to save.
     func saveQuests(_ quests: [Quest]) {
         do {
             let data = try JSONEncoder().encode(quests)
-            UserDefaults.standard.set(data, forKey: questsKey)
+            try data.write(to: fileURL, options: [.atomic, .completeFileProtection])
         } catch {
-            print("Error encoding quests: \(error)")
+            print("Error saving quests: \(error)")
         }
     }
 }

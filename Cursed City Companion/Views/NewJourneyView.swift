@@ -1,128 +1,111 @@
 import SwiftUI
 
 struct NewJourneyView: View {
-    @EnvironmentObject private var store: Store
-    let questId: UUID
-    let onStarted: (() -> Void)?
+    @EnvironmentObject private var questManager: QuestManager
+    let quest: Quest
+    let onStarted: () -> Void
+    
     @Environment(\.dismiss) private var dismiss
 
     @State private var type: JourneyType = .deliverance
     @State private var level: Int = 1
     @State private var enemyGroups: Int = 3
     @State private var selectedHeroes = Set<UUID>()
-
-    init(questId: UUID, onStarted: (() -> Void)? = nil) {
-        self.questId = questId
-        self.onStarted = onStarted
-    }
-
+    
     var body: some View {
-        if let qIndex = store.quests.firstIndex(where: {$0.id == questId}) {
-            let quest = store.quests[qIndex]
-            NavigationStack {
+        NavigationStack {
+            // The main VStack is now wrapped in a ScrollView to ensure
+            // all content is accessible, even on smaller screens.
+            ScrollView {
                 VStack(spacing: 16) {
-                    // Type & level
-                    VStack(alignment: .leading, spacing: 8) {
-                        Picker("Journey Type", selection: $type) {
-                            ForEach(JourneyType.allCases) { t in
-                                Text(t.rawValue).tag(t)
-                            }
-                        }.pickerStyle(.segmented)
-                        Stepper("Level \(level)", value: $level, in: 1...max(1, quest.partyLevelCap))
-                        Stepper("Enemy groups \(enemyGroups)", value: $enemyGroups, in: 1...8)
-                    }.ccPanel()
+                    journeySettingsPanel
 
                     if type == .decapitation {
-                        DecapitationRow(state: Binding(get: { store.quests[qIndex].decapitationState }, set: { store.quests[qIndex].decapitationState = $0 }), heroes: quest.heroes)
-                            .overlay(alignment: .bottomLeading) {
-                                Text("Pick a target above.").font(.caption).padding(8).foregroundStyle(.secondary)
-                            }
+                        // The placeholder is now replaced with the actual, interactive DecapitationRow.
+                        DecapitationRow(quest: quest)
                     }
 
-                    // Participants
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("Participants").font(.headline).foregroundStyle(CCTheme.cursedGold)
-                        ForEach(quest.heroes) { h in
-                            let disabled = !h.alive
-                            HStack {
-                                Toggle(isOn: Binding(
-                                    get: { selectedHeroes.contains(h.id) },
-                                    set: { isOn in
-                                        if isOn {
-                                            if !selectedHeroes.contains(h.id) && selectedHeroes.count < 4 {
-                                                selectedHeroes.insert(h.id)
-                                            }
-                                        } else {
-                                            selectedHeroes.remove(h.id)
-                                        }
-                                    }
-                                )) {
-                                    HStack(spacing: 8) {
-                                        Image(h.name)
-                                            .resizable()
-                                            .scaledToFill()
-                                            .frame(width: 28, height: 28)
-                                            .clipShape(Circle())
-                                            .overlay(Circle().stroke(.secondary.opacity(0.3), lineWidth: 1))
-                                        Text(h.name)
-                                        if disabled { Text("(fallen)").foregroundStyle(CCTheme.bloodRed) }
-                                    }
-                                }
-                                .disabled(disabled || (!selectedHeroes.contains(h.id) && selectedHeroes.count >= 4))
-                            }
-                        }
-                        Text("Select exactly 4 heroes (\(selectedHeroes.count)/4).").font(.caption).foregroundStyle(.secondary)
-                    }.ccPanel()
+                    participantsPanel
 
                     Spacer()
+                    
                     Button {
-                        start(qIndex: qIndex)
-                        dismiss()
+                        startJourney()
                     } label: { Label("Start Journey", systemImage: "play.fill") }
                     .buttonStyle(CCPrimaryButton())
-                    .disabled(!canStart(quest: quest))
+                    .disabled(!canStart)
                 }
                 .padding()
-                .navigationTitle("New Journey")
-                .toolbar {
-                    ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
-                }
-                .ccToolbar()
-                .ccBackground()
             }
+            .navigationTitle("New Journey")
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
+            }
+            .ccToolbar()
+            .ccBackground()
         }
     }
 
-    private func canStart(quest: Quest) -> Bool {
-        guard selectedHeroes.count == 4 else { return false }
+    private var journeySettingsPanel: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Picker("Journey Type", selection: $type) {
+                ForEach(JourneyType.allCases) { t in Text(t.rawValue).tag(t) }
+            }.pickerStyle(.segmented)
+            Stepper("Level \(level)", value: $level, in: 1...max(1, quest.partyLevelCap))
+            Stepper("Enemy groups \(enemyGroups)", value: $enemyGroups, in: 1...8)
+        }.ccPanel()
+    }
+
+    private var participantsPanel: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Participants").font(.headline).foregroundStyle(CCTheme.cursedGold)
+            ForEach(quest.heroes.filter { $0.alive }) { hero in
+                Toggle(isOn: Binding(
+                    get: { selectedHeroes.contains(hero.id) },
+                    set: { isOn in
+                        if isOn {
+                            if selectedHeroes.count < 4 { selectedHeroes.insert(hero.id) }
+                        } else {
+                            selectedHeroes.remove(hero.id)
+                        }
+                    }
+                )) {
+                    HeroListRow(hero: hero)
+                }
+                .disabled(!selectedHeroes.contains(hero.id) && selectedHeroes.count >= 4)
+            }
+            Text("Select up to 4 heroes (\(selectedHeroes.count)/4).").font(.caption).foregroundStyle(.secondary)
+        }.ccPanel()
+    }
+
+    private var canStart: Bool {
+        guard !selectedHeroes.isEmpty && selectedHeroes.count <= 4 else { return false }
+        
         if type == .decapitation {
-            guard let active = quest.decapitationState.activeID,
-                  let def = DecapitationRegistry.all.first(where: {$0.id == active}) else { return false }
-            let eligible = quest.heroes.allSatisfy { $0.level == def.requiredPartyLevel && $0.alive }
-            return eligible
+            // The logic now correctly reads the active target directly from the quest state,
+            // which is updated by the interactive DecapitationRow.
+            guard let activeID = quest.decapitationState.activeID,
+                  let def = DecapitationRegistry.all.first(where: { $0.id == activeID })
+            else { return false }
+            
+            let participatingHeroes = quest.heroes.filter { selectedHeroes.contains($0.id) }
+            return participatingHeroes.allSatisfy { $0.level >= def.requiredPartyLevel }
         }
+        
         return true
     }
 
-    private func start(qIndex: Int) {
-        var quest = store.quests[qIndex]
-        let participants = Array(selectedHeroes)
-        let entries: [InitiativeEntry] =
-            participants.map { id in
-                let name = store.quests[qIndex].heroes.first(where: { $0.id == id })?.name ?? "Hero"
-                return InitiativeEntry(heroId: id, label: name)
-            } +
-            (0..<enemyGroups).map { i in InitiativeEntry(isEnemy: true, label: "Enemy \(i+1)") }
-        let turn = Turn(entries: entries)
-        quest.activeJourney = ActiveJourney(type: type, level: level, enemyGroups: enemyGroups, participants: participants, turns: [turn])
-        store.quests[qIndex] = quest
-        onStarted?()
+    private func startJourney() {
+        // The manager is now the single point of truth for starting a journey.
+        questManager.startJourney(
+            questId: quest.id,
+            type: type,
+            level: level,
+            enemyGroups: enemyGroups,
+            participants: selectedHeroes
+        )
+        
+        onStarted()
+        dismiss()
     }
 }
-
-#if DEBUG
-#Preview("New Journey – Empty Store") {
-    NewJourneyView(questId: UUID())
-        .environmentObject(Store())
-}
-#endif
