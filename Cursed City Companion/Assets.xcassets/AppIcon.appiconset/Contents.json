@@ -28,6 +28,60 @@
       "size" : "1024x1024"
     },
     {
+      "filename" : "WQCC - Companion icon-iOS-Default-20x20@2x.png",
+      "idiom" : "iphone",
+      "scale" : "2x",
+      "size" : "20x20"
+    },
+    {
+      "filename" : "WQCC - Companion icon-iOS-Default-20x20@3x.png",
+      "idiom" : "iphone",
+      "scale" : "3x",
+      "size" : "20x20"
+    },
+    {
+      "filename" : "WQCC - Companion icon-iOS-Default-29x29@2x.png",
+      "idiom" : "iphone",
+      "scale" : "2x",
+      "size" : "29x29"
+    },
+    {
+      "filename" : "WQCC - Companion icon-iOS-Default-29x29@3x.png",
+      "idiom" : "iphone",
+      "scale" : "3x",
+      "size" : "29x29"
+    },
+    {
+      "filename" : "WQCC - Companion icon-iOS-Default-40x40@2x.png",
+      "idiom" : "iphone",
+      "scale" : "2x",
+      "size" : "40x40"
+    },
+    {
+      "filename" : "WQCC - Companion icon-iOS-Default-40x40@3x.png",
+      "idiom" : "iphone",
+      "scale" : "3x",
+      "size" : "40x40"
+    },
+    {
+      "filename" : "WQCC - Companion icon-iOS-Default-60x60@2x.png",
+      "idiom" : "iphone",
+      "scale" : "2x",
+      "size" : "60x60"
+    },
+    {
+      "filename" : "WQCC - Companion icon-iOS-Default-60x60@3x.png",
+      "idiom" : "iphone",
+      "scale" : "3x",
+      "size" : "60x60"
+    },
+    {
+      "filename" : "WQCC - Companion icon-iOS-Default-1024x1024@1x.png",
+      "idiom" : "ios-marketing",
+      "scale" : "1x",
+      "size" : "1024x1024"
+    },
+    {
       "idiom" : "mac",
       "scale" : "1x",
       "size" : "16x16"
