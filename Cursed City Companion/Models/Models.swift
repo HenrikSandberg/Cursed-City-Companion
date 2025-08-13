@@ -6,12 +6,20 @@ import Foundation
 struct Hero: Identifiable, Codable, Equatable {
     let id: UUID
     var name: String
-    var level: Int
     var experience: Int
     var alive: Bool
     var items: [String]
     var treasureCards: Int
     var notes: String
+    var level: Int = 0
+
+    enum ExperienceStage: Int, Codable {
+        case none = 0
+        case novice = 1
+        case veteran = 2
+    }
+
+    var xpStage: ExperienceStage = .none
 
     init(id: UUID = UUID(),
          name: String,

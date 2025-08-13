@@ -5,6 +5,7 @@ struct QuestDetailView: View {
     let questId: UUID
 
     @State private var showingNewJourney = false
+    @State private var navigateToActiveJourney = false
 
     var body: some View {
         ZStack {
@@ -35,7 +36,13 @@ struct QuestDetailView: View {
                                 NavigationLink {
                                     HeroDetailView(questId: questBinding.wrappedValue.id, heroId: hero.id)
                                 } label: {
-                                    HStack {
+                                    HStack(spacing: 12) {
+                                        Image(hero.name)
+                                            .resizable()
+                                            .scaledToFill()
+                                            .frame(width: 36, height: 36)
+                                            .clipShape(RoundedRectangle(cornerRadius: 6))
+                                            .overlay(RoundedRectangle(cornerRadius: 6).stroke(.secondary.opacity(0.3)))
                                         VStack(alignment: .leading) {
                                             Text(hero.name).font(.headline)
                                             Text(hero.alive ? "Alive" : "Fallen")
@@ -45,7 +52,8 @@ struct QuestDetailView: View {
                                         Spacer()
                                         Text("Lv \(hero.level) • \(hero.experience) XP")
                                             .font(.callout).foregroundStyle(CCTheme.parchment)
-                                    }.padding(.vertical, 6)
+                                    }
+                                    .padding(.vertical, 6)
                                 }
                                 Divider()
                             }
@@ -110,10 +118,23 @@ struct QuestDetailView: View {
                     .background(.ultraThinMaterial)
                 }
                 .sheet(isPresented: $showingNewJourney) {
-                    NewJourneyView(questId: questBinding.wrappedValue.id)
-                        .presentationDetents([.medium, .large])
+                    NewJourneyView(questId: questBinding.wrappedValue.id, onStarted: {
+                        showingNewJourney = false
+                        navigateToActiveJourney = true
+                    })
+                    .presentationDetents([.medium, .large])
                 }
                 .navigationTitle(store.quests[questIndex].name)
+                .background(
+                    NavigationLink(
+                        destination: ActiveJourneyView(questId: questBinding.wrappedValue.id),
+                        isActive: $navigateToActiveJourney
+                    ) { EmptyView() }
+                    .hidden()
+                )
+                .onChange(of: store.quests[questIndex].activeJourney) { newValue in
+                    if newValue == nil { navigateToActiveJourney = false }
+                }
                 .ccToolbar()
             } else {
                 Text("Quest not found").foregroundStyle(.red)

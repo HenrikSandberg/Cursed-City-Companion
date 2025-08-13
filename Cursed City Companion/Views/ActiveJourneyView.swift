@@ -10,6 +10,7 @@ import SwiftUI
 
 struct ActiveJourneyView: View {
     @EnvironmentObject private var store: Store
+    @Environment(\.dismiss) private var dismiss
     let questId: UUID
 
     var body: some View {
@@ -28,7 +29,9 @@ struct ActiveJourneyView: View {
                         .buttonStyle(CCSecondaryButton())
                     Spacer()
                     NavigationLink {
-                        EndJourneyView(questId: store.quests[qIndex].id)
+                        EndJourneyView(questId: questId, onSaved: {
+                            dismiss()
+                        })
                     } label: { Label("End Journey", systemImage: "flag.checkered") }
                     .buttonStyle(CCPrimaryButton())
                 }

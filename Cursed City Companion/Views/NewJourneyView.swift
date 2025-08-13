@@ -3,12 +3,18 @@ import SwiftUI
 struct NewJourneyView: View {
     @EnvironmentObject private var store: Store
     let questId: UUID
+    let onStarted: (() -> Void)?
     @Environment(\.dismiss) private var dismiss
 
     @State private var type: JourneyType = .deliverance
     @State private var level: Int = 1
     @State private var enemyGroups: Int = 3
     @State private var selectedHeroes = Set<UUID>()
+
+    init(questId: UUID, onStarted: (() -> Void)? = nil) {
+        self.questId = questId
+        self.onStarted = onStarted
+    }
 
     var body: some View {
         if let qIndex = store.quests.firstIndex(where: {$0.id == questId}) {
@@ -110,5 +116,13 @@ struct NewJourneyView: View {
         let turn = Turn(entries: entries)
         quest.activeJourney = ActiveJourney(type: type, level: level, enemyGroups: enemyGroups, participants: participants, turns: [turn])
         store.quests[qIndex] = quest
+        onStarted?()
     }
 }
+
+#if DEBUG
+#Preview("New Journey – Empty Store") {
+    NewJourneyView(questId: UUID())
+        .environmentObject(Store())
+}
+#endif
